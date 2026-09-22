@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  clipconvert:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./output:/app/output
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - MAX_UPLOAD_SIZE=524288000
+      - MAX_VIDEO_DURATION=7200
+      - MAX_CLIP_DURATION=1800
+      - FILE_CLEANUP_DAYS=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

@@ -1,0 +1,3 @@
+@echo off
+echo Starting ClipConvert server...
+npx next dev --port 3000
