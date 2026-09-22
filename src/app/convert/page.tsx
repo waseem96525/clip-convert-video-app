@@ -65,6 +65,8 @@ export default function ConvertPage() {
       setDuration(data.video.duration);
       if (data.video && data.video.hasAudio === false) {
         toast.error('This video has no audio track, so no audio can be extracted.');
+      } else if (data.video && data.video.hasAudio) {
+        toast.success(`Audio track detected (${data.video.audioCodec || 'audio'})`, { id: 'audio-ok' });
       }
       setStartTime(0);
       setEndTime(data.video.duration);
@@ -92,6 +94,8 @@ export default function ConvertPage() {
       setDuration(data.video.duration);
       if (data.video && data.video.hasAudio === false) {
         toast.error('This video has no audio track, so no audio can be extracted.');
+      } else if (data.video && data.video.hasAudio) {
+        toast.success(`Audio track detected (${data.video.audioCodec || 'audio'})`, { id: 'audio-ok' });
       }
       setStartTime(0);
       setEndTime(data.video.duration);

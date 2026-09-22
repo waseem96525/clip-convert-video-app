@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     if (!fs.existsSync(video.filepath)) return NextResponse.json({ error: 'Video file not found on server.' }, { status: 404 });
 
     const meta = await getVideoMetadata(video.filepath);
-    if (!meta.hasAudio || meta.audioCodec === 'none') {
+    if (!meta.hasAudio) {
       return NextResponse.json({ error: 'This video has no audio track, so no audio can be extracted.' }, { status: 400 });
     }
 

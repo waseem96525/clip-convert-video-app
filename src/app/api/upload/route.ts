@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
         duration,
         format: ext.slice(1),
         hasAudio: metadata.hasAudio,
+        audioCodec: metadata.audioCodec,
         uploadedAt: new Date().toISOString(),
         expiresAt,
       },
