@@ -10,10 +10,11 @@ export function loadFFmpeg(): Promise<FFmpeg> {
     ffmpegP = (async () => {
       const ffmpeg = new FFmpeg();
       ffmpeg.on('progress', ({ progress }) => progressCb?.(progress));
+      const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
       await ffmpeg.load({
-        coreURL: '/ffmpeg/ffmpeg-core.js',
-        wasmURL: '/ffmpeg/ffmpeg-core.wasm',
-        classWorkerURL: '/ffmpeg/worker.js',
+        coreURL: `${origin}/ffmpeg/ffmpeg-core.js`,
+        wasmURL: `${origin}/ffmpeg/ffmpeg-core.wasm`,
+        classWorkerURL: `${origin}/ffmpeg/worker.js`,
       });
       return ffmpeg;
     })();
