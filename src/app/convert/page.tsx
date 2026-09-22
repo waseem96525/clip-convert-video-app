@@ -106,6 +106,39 @@ export default function ConvertPage() {
     if (video) setEndTime(video.currentTime);
   }, []);
 
+  const pollClipStatus = useCallback((clipId: string) => {
+    const maxAttempts = 60;
+    let attempts = 0;
+    const timer = setInterval(async () => {
+      attempts += 1;
+      if (attempts > maxAttempts) {
+        clearInterval(timer);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/clip?id=${clipId}`);
+        const data = (await safeJson(res)) || {};
+        const clip = data.clip;
+        if (!clip) {
+          clearInterval(timer);
+          return;
+        }
+        setClips(prev => prev.map(c => (c.id === clipId ? clip : c)));
+        if (clip.status === 'completed' || clip.status === 'failed') {
+          clearInterval(timer);
+          if (clip.status === 'completed' && clip.file_size > 0) {
+            toast.success(`"${clip.name}" is ready to download!`, { id: `clip-${clipId}` });
+          } else {
+            toast.error(clip.error || 'Clip processing failed.', { id: `clip-${clipId}` });
+          }
+        }
+      } catch {
+        setClips(prev => prev.map(c => (c.id === clipId ? { ...c, status: 'error' } : c)));
+        clearInterval(timer);
+      }
+    }, 1500);
+  }, []);
+
   const validateAndCreate = useCallback(async () => {
     const error = validateClipTimes(startTime, endTime);
     if (error) { toast.error(error); return; }
@@ -130,19 +163,28 @@ export default function ConvertPage() {
       const clipData = (await safeJson(clipRes)) || {};
       setClips(prev => [...prev, clipData.clip]);
       setClipName('');
+      pollClipStatus(data.clipId);
     } catch (err: any) {
       toast.error(err.message || 'Processing failed', { id: 'process' });
     } finally {
       setIsProcessing(false);
       setTimeout(() => setProgress(0), 2000);
     }
-  }, [videoId, clipName, startTime, endTime, audioSettings, duration]);
+  }, [videoId, clipName, startTime, endTime, audioSettings, duration, pollClipStatus]);
 
   const downloadClip = useCallback(async (clipId: string) => {
     const clip = clips.find(c => c.id === clipId);
+    if (clip && clip.status !== 'completed') {
+      toast.error(clip?.status === 'processing' || clip?.status === 'queued' ? 'Clip is still processing. Please wait.' : 'This clip is not ready to download.');
+      return;
+    }
     const name = clip?.name || 'clip';
     const res = await fetch(`/api/download?id=${clipId}&name=${encodeURIComponent(name)}`);
-    if (!res.ok) return;
+    if (!res.ok) {
+      const data = (await safeJson(res)) || {};
+      toast.error(data.error || `Download failed (${res.status}).`);
+      return;
+    }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -262,19 +304,43 @@ export default function ConvertPage() {
           <div className="space-y-4">
             <h2 className="text-xl font-bold">Created Clips ({clips.length})</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {clips.map(clip => (
+              {clips.map(clip => {
+                const isDone = clip.status === 'completed';
+                const isFailed = clip.status === 'failed' || clip.status === 'error';
+                const isBusy = !isDone && !isFailed;
+                return (
                 <div key={clip.id} className="p-4 bg-card rounded-xl border border-card-border">
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-semibold text-sm">{clip.name}</h4>
-                    <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded">✓ Ready</span>
+                    <h4 className="font-semibold text-sm truncate">{clip.name}</h4>
+                    {isDone ? (
+                      <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded whitespace-nowrap">✓ Ready</span>
+                    ) : isFailed ? (
+                      <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-2 py-0.5 rounded whitespace-nowrap">Failed</span>
+                    ) : (
+                      <span className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-2 py-0.5 rounded whitespace-nowrap">⏳ {clip.progress || 0}%</span>
+                    )}
                   </div>
-                  <p className="text-xs text-muted mb-2">{formatTime(clip.start_time)} – {formatTime(clip.end_time)} · {clip.format.toUpperCase()} · {clip.bitrate}</p>
+                  <p className="text-xs text-muted mb-2 truncate">{formatTime(clip.start_time)} – {formatTime(clip.end_time)} · {clip.format.toUpperCase()} · {clip.bitrate}</p>
+                  {isFailed && clip.error && <p className="text-xs text-red-500 mb-2 break-words">{clip.error}</p>}
                   <div className="flex gap-2">
-                    <button onClick={() => downloadClip(clip.id)} className="flex-1 px-3 py-3 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 transition-colors min-h-[44px]">Download</button>
-                    <button onClick={() => deleteClip(clip.id)} className="flex-1 px-3 py-3 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700 transition-colors min-h-[44px]">Delete</button>
+                    <button
+                      onClick={() => downloadClip(clip.id)}
+                      disabled={!isDone}
+                      className="flex-1 px-3 py-3 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[44px]"
+                    >
+                      {isBusy ? 'Processing...' : isFailed ? 'Download' : 'Download'}
+                    </button>
+                    <button
+                      onClick={() => deleteClip(clip.id)}
+                      disabled={isBusy}
+                      className="flex-1 px-3 py-3 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[44px]"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

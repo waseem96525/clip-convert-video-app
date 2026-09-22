@@ -18,6 +18,11 @@ export default function ClipsPage() {
     loadClips();
   }, []);
 
+  useEffect(() => {
+    const timer = setInterval(loadClips, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
   const loadClips = async () => {
     try {
       const res = await fetch('/api/clip');

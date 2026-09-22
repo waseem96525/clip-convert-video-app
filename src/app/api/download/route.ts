@@ -16,6 +16,11 @@ export async function GET(request: NextRequest) {
   const db = getDb();
   const clip = db.prepare('SELECT * FROM clips WHERE id = ?').get(clipId) as any;
   if (!clip) return NextResponse.json({ error: 'Clip not found.' }, { status: 404 });
+  if (clip.status !== 'completed') {
+    return NextResponse.json({
+      error: clip.status === 'failed' ? 'Clip processing failed. Please try again.' : 'Clip is still processing. Please wait.',
+    }, { status: 409 });
+  }
   if (!fs.existsSync(clip.filepath)) return NextResponse.json({ error: 'File not found.' }, { status: 404 });
 
   const ext = path.extname(clip.filepath);

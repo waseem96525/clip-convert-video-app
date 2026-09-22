@@ -14,6 +14,9 @@ interface ClipCardProps {
 }
 
 function ClipCard({ clip, onPreview, onDownload, onDelete, onRename }: ClipCardProps) {
+  const isDone = clip.status === 'completed';
+  const isFailed = clip.status === 'failed' || clip.status === 'error';
+  const isBusy = !isDone && !isFailed;
   return (
     <div className="p-4 bg-card rounded-xl border border-card-border hover:border-indigo-500 transition-colors">
       <div className="flex items-start justify-between mb-3">
@@ -22,21 +25,42 @@ function ClipCard({ clip, onPreview, onDownload, onDelete, onRename }: ClipCardP
           <p className="text-xs text-muted">{formatTime(clip.start_time)} → {formatTime(clip.end_time)}</p>
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={() => onPreview(clip.id)} className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Preview">
+          <button
+            onClick={() => onPreview(clip.id)}
+            disabled={!isDone}
+            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Preview"
+          >
             <MdPlayArrow className="text-indigo-500" />
           </button>
-          <button onClick={() => onDownload(clip.id)} className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Download">
+          <button
+            onClick={() => onDownload(clip.id)}
+            disabled={!isDone}
+            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Download"
+          >
             <MdDownload className="text-green-500" />
           </button>
-          <button onClick={() => onDelete(clip.id)} className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Delete">
+          <button
+            onClick={() => onDelete(clip.id)}
+            disabled={isBusy}
+            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Delete"
+          >
             <MdDelete className="text-red-500" />
           </button>
         </div>
       </div>
       <div className="flex items-center gap-2 text-xs text-muted">
-        <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded font-mono">{clip.format.toUpperCase()}</span>
+        <span className="px-2 py-0.5 rounded font-mono bg-gray-100 dark:bg-gray-800">{clip.format.toUpperCase()}</span>
         <span>{formatTime(clip.duration)}</span>
-        <span>{clip.file_size > 0 ? `${(clip.file_size / 1024).toFixed(1)} KB` : ''}</span>
+        {isBusy ? (
+          <span className="text-yellow-500">⏳ Processing {clip.progress || 0}%</span>
+        ) : isFailed ? (
+          <span className="text-red-500">Failed</span>
+        ) : clip.file_size > 0 ? (
+          <span>{(clip.file_size / 1024).toFixed(1)} KB</span>
+        ) : null}
       </div>
     </div>
   );
