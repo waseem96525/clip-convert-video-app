@@ -100,6 +100,10 @@ function initializeTables() {
     CREATE INDEX IF NOT EXISTS idx_jobs_video ON processing_jobs(video_id);
     CREATE INDEX IF NOT EXISTS idx_jobs_status ON processing_jobs(status);
   `);
+
+  db.prepare(
+    'INSERT OR IGNORE INTO users (id, email, name) VALUES (?, ?, ?)'
+  ).run('guest', 'guest@clipconvert.local', 'Guest');
 }
 
 export function cleanupExpiredFiles() {

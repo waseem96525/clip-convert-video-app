@@ -60,7 +60,7 @@ export default function ConvertPage() {
       if (!res.ok) throw new Error(data.error);
       toast.success('Video uploaded!', { id: 'upload' });
       setVideoId(data.video.id);
-      setSrc(data.video.filepath);
+      setSrc(`/api/video?id=${data.video.id}`);
       setDuration(data.video.duration);
       setStartTime(0);
       setEndTime(data.video.duration);
@@ -84,7 +84,7 @@ export default function ConvertPage() {
       if (!res.ok) throw new Error(data.error);
       toast.success('Video fetched!', { id: 'url' });
       setVideoId(data.video.id);
-      setSrc(data.video.filepath);
+      setSrc(`/api/video?id=${data.video.id}`);
       setDuration(data.video.duration);
       setStartTime(0);
       setEndTime(data.video.duration);

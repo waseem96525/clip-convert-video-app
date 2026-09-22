@@ -72,6 +72,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Upload error:', error);
-    return NextResponse.json({ error: 'Failed to upload video.' }, { status: 500 });
+    return NextResponse.json({ error: `Failed to upload video: ${error.message}` }, { status: 500 });
   }
 }

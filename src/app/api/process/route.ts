@@ -34,12 +34,6 @@ export async function POST(request: NextRequest) {
     const outputPath = path.join(OUTPUT_DIR, outputFilename);
     const expiresAt = new Date(Date.now() + CONFIG.fileCleanupDays * 24 * 60 * 60 * 1000).toISOString();
 
-    const jobId = generateId();
-    db.prepare(`
-      INSERT INTO processing_jobs (id, video_id, clip_id, status, progress, progress_message, created_at)
-      VALUES (?, ?, 'queued', 0, 'Preparing...', datetime('now'))
-    `).run(jobId, videoId);
-
     db.prepare(`
       INSERT INTO clips (id, video_id, video_filename, name, start_time, end_time, duration, format, bitrate, sample_rate, channels, volume, fade_in, fade_out, normalize, status, progress, filepath, expires_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?)
@@ -47,6 +41,12 @@ export async function POST(request: NextRequest) {
       audioSettings.format, audioSettings.bitrate, audioSettings.sampleRate, audioSettings.channels,
       audioSettings.volume, audioSettings.fadeIn, audioSettings.fadeOut, audioSettings.normalize ? 1 : 0,
       outputPath, expiresAt);
+
+    const jobId = generateId();
+    db.prepare(`
+      INSERT INTO processing_jobs (id, video_id, clip_id, status, progress, progress_message, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    `).run(jobId, videoId, clipId, 'queued', 0, 'Preparing...');
 
     setTimeout(async () => {
       await processClip(clipId, jobId, video.filepath, outputPath, startTime, endTime, audioSettings);
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Process error:', error);
-    return NextResponse.json({ error: 'Failed to start clip processing.' }, { status: 500 });
+    return NextResponse.json({ error: `Failed to start clip processing: ${error.message}` }, { status: 500 });
   }
 }
 
@@ -70,11 +70,14 @@ async function processClip(clipId: string, jobId: string, inputPath: string, out
     db.prepare('UPDATE processing_jobs SET status = ?, progress = ?, progress_message = ? WHERE id = ?').run('processing', 5, 'Extracting audio...', jobId);
     db.prepare('UPDATE clips SET status = ?, progress = ? WHERE id = ?').run('processing', 5, clipId);
 
-    await extractAudio(inputPath, outputPath, startTime, endTime, settings);
+    await extractAudio(inputPath, outputPath, startTime, endTime, {
+      ...settings,
+      duration: endTime - startTime,
+    });
 
     const stats = fs.statSync(outputPath);
     db.prepare('UPDATE processing_jobs SET status = ?, progress = ?, progress_message = ?, completed_at = ? WHERE id = ?').run('completed', 100, 'Complete!', new Date().toISOString(), jobId);
-    db.prepare('UPDATE clips SET status = ?, progress = ?, file_size = ?, filepath = ?, completed_at = ? WHERE id = ?').run('completed', 100, stats.size, outputPath, new Date().toISOString(), clipId);
+    db.prepare('UPDATE clips SET status = ?, progress = ?, file_size = ?, filepath = ? WHERE id = ?').run('completed', 100, stats.size, outputPath, clipId);
   } catch (error: any) {
     console.error('Processing failed:', error);
     db.prepare('UPDATE processing_jobs SET status = ?, error = ?, completed_at = ? WHERE id = ?').run('failed', error.message || 'Processing failed', new Date().toISOString(), jobId);
