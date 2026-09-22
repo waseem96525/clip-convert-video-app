@@ -8,6 +8,7 @@ import { AudioSettings } from '@/types';
 import { CONFIG, formatTime } from '@/lib/config';
 import { validateClipTimes } from '@/lib/validators';
 import toast from 'react-hot-toast';
+import { safeJson } from '@/lib/clientHttp';
 import { MdUpload, MdLink, MdWarning } from 'react-icons/md';
 import Navbar from '@/components/Navbar';
 import UploadArea from '@/components/UploadArea';
@@ -56,8 +57,8 @@ export default function ConvertPage() {
     try {
       toast.loading('Uploading...', { id: 'upload' });
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = (await safeJson(res)) || {};
+      if (!res.ok) throw new Error(data.error || `Upload failed (${res.status}).`);
       toast.success('Video uploaded!', { id: 'upload' });
       setVideoId(data.video.id);
       setSrc(`/api/video?id=${data.video.id}`);
@@ -80,8 +81,8 @@ export default function ConvertPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: urlInput.trim() }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = (await safeJson(res)) || {};
+      if (!res.ok) throw new Error(data.error || `Failed to fetch video (${res.status}).`);
       toast.success('Video fetched!', { id: 'url' });
       setVideoId(data.video.id);
       setSrc(`/api/video?id=${data.video.id}`);
@@ -120,13 +121,13 @@ export default function ConvertPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ videoId, name: clipName.trim(), startTime, endTime, audioSettings }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = (await safeJson(res)) || {};
+      if (!res.ok) throw new Error(data.error || `Processing failed (${res.status}).`);
       setProgress(100);
       setProgressMsg('Complete!');
       toast.success('Clip created!', { id: 'process' });
       const clipRes = await fetch(`/api/clip?id=${data.clipId}`);
-      const clipData = await clipRes.json();
+      const clipData = (await safeJson(clipRes)) || {};
       setClips(prev => [...prev, clipData.clip]);
       setClipName('');
     } catch (err: any) {

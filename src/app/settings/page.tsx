@@ -6,6 +6,7 @@ import { CONFIG } from '@/lib/config';
 import { getDb } from '@/lib/db';
 import Navbar from '@/components/Navbar';
 import toast from 'react-hot-toast';
+import { safeJson } from '@/lib/clientHttp';
 
 export default function SettingsPage() {
   const { isDark, toggle } = useDarkMode();
@@ -22,8 +23,8 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetch('/api/health')
-      .then(r => r.json())
-      .then(d => setStats(d.stats))
+      .then(r => safeJson(r))
+      .then(d => d && setStats(d.stats))
       .catch(() => {});
   }, []);
 

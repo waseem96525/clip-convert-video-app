@@ -6,6 +6,7 @@ import { formatTime } from '@/lib/config';
 import { useDarkMode } from '@/hooks/useDarkMode';
 import Navbar from '@/components/Navbar';
 import ClipList from '@/components/ClipList';
+import { safeJson } from '@/lib/clientHttp';
 
 export default function ClipsPage() {
   const { isDark } = useDarkMode();
@@ -20,7 +21,7 @@ export default function ClipsPage() {
   const loadClips = async () => {
     try {
       const res = await fetch('/api/clip');
-      const data = await res.json();
+      const data = (await safeJson(res)) || {};
       if (data.clips) {
         setClips(data.clips);
         if (data.clips.length > 0) setVideoFilename(data.clips[0].video_filename);
