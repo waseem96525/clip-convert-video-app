@@ -2,15 +2,7 @@ export const CONFIG = {
   maxUploadSize: parseInt(process.env.MAX_UPLOAD_SIZE || '524288000'),
   maxVideoDuration: parseInt(process.env.MAX_VIDEO_DURATION || '7200'),
   maxClipDuration: parseInt(process.env.MAX_CLIP_DURATION || '1800'),
-  maxConcurrentJobs: parseInt(process.env.MAX_CONCURRENT_JOBS || '2'),
-  guestClipsPerDay: parseInt(process.env.GUEST_CLIPS_PER_DAY || '3'),
-  fileCleanupDays: parseInt(process.env.FILE_CLEANUP_DAYS || '1'),
-  port: parseInt(process.env.PORT || '3000'),
   nodeEnv: process.env.NODE_ENV || 'development',
-  uploadDir: process.env.UPLOAD_DIR || './uploads',
-  outputDir: process.env.OUTPUT_DIR || './output',
-  tempDir: process.env.TEMP_DIR || './temp',
-  dbPath: process.env.DB_PATH || './clipconvert.db',
 } as const;
 
 export function formatBytes(bytes: number): string {

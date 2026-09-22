@@ -3,18 +3,23 @@
 import { useState, useEffect } from 'react';
 import { useDarkMode } from '@/hooks/useDarkMode';
 import { CONFIG } from '@/lib/config';
-import { getDb } from '@/lib/db';
 import Navbar from '@/components/Navbar';
 import toast from 'react-hot-toast';
 import { safeJson } from '@/lib/clientHttp';
 
+interface SystemStats {
+  runtime: string;
+  processing: string;
+  storage: string;
+}
+
 export default function SettingsPage() {
-  const { isDark, toggle } = useDarkMode();
+  const { isDark } = useDarkMode();
   const [theme, setTheme] = useState(isDark ? 'dark' : 'light');
   const [defaultFormat, setDefaultFormat] = useState('mp3');
   const [defaultBitrate, setDefaultBitrate] = useState('192k');
   const [maxFileSize, setMaxFileSize] = useState(CONFIG.maxUploadSize / 1024 / 1024);
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<SystemStats | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
@@ -23,8 +28,8 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetch('/api/health')
-      .then(r => safeJson(r))
-      .then(d => d && setStats(d.stats))
+      .then(r => safeJson<SystemStats>(r))
+      .then(d => { if (d) setStats(d); })
       .catch(() => {});
   }, []);
 
@@ -83,24 +88,23 @@ export default function SettingsPage() {
         <div className="p-6 bg-card rounded-xl border border-card-border space-y-4">
           <h2 className="text-xl font-semibold">System Status</h2>
           {stats && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                <p className="text-xs text-muted">Total Users</p>
-                <p className="text-xl font-bold">{stats.totalUsers || 0}</p>
+                <p className="text-xs text-muted">Runtime</p>
+                <p className="text-lg font-bold">{stats.runtime || '—'}</p>
               </div>
               <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                <p className="text-xs text-muted">Conversions</p>
-                <p className="text-xl font-bold">{stats.totalConversions || 0}</p>
-              </div>
-              <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                <p className="text-xs text-muted">Active Jobs</p>
-                <p className="text-xl font-bold">{stats.activeJobs || 0}</p>
+                <p className="text-xs text-muted">Processing</p>
+                <p className="text-lg font-bold">{stats.processing || '—'}</p>
               </div>
               <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
                 <p className="text-xs text-muted">Storage</p>
-                <p className="text-xl font-bold">{((stats.storageUsed || 0) / 1024 / 1024).toFixed(1)} MB</p>
+                <p className="text-lg font-bold">{stats.storage || '—'}</p>
               </div>
             </div>
+          )}
+          {stats && stats.storage === 'not-configured' && (
+            <p className="text-xs text-orange-500">Set the BLOB_READ_WRITE_TOKEN environment variable to enable cloud storage for fetched links and saved clips.</p>
           )}
         </div>
 

@@ -2,8 +2,6 @@
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
-type Theme = 'dark' | 'light';
-
 interface DarkModeContextType {
   isDark: boolean;
   toggle: () => void;

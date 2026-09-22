@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState, useRef } from 'react';
-import { MdCloudUpload, MdFolder, MdWarning } from 'react-icons/md';
+import { MdCloudUpload, MdFolder } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import { CONFIG } from '@/lib/config';
 import { validateFile } from '@/lib/validators';
