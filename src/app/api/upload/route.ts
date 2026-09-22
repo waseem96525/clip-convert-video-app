@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     const bytes = await file.arrayBuffer();
-    const byteLength = new Uint8Array(bytes).length;
+    const byteLength = file.size;
     if (byteLength > CONFIG.maxUploadSize) {
       return NextResponse.json({ error: `File exceeds maximum size of ${(CONFIG.maxUploadSize / 1024 / 1024).toFixed(0)} MB.` }, { status: 413 });
     }

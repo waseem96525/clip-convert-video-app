@@ -74,7 +74,7 @@ export default function UploadArea({ onUpload, onUrlClick }: UploadAreaProps) {
         <input
           ref={fileInputRef}
           type="file"
-          accept="video/mp4,video/webm,video/quicktime,video/x-msvideo,video/x-matroska,video/mp4,video/avi"
+          accept="video/*,.mp4,.webm,.mov,.avi,.mkv,.m4v,.flv,.wmv"
           className="hidden"
           onChange={handleFileSelect}
         />
