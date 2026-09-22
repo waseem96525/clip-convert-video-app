@@ -338,7 +338,7 @@ export default function ConvertPage() {
                   type="url"
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
-                  placeholder="https://example.com/video.mp4"
+                  placeholder="Paste a direct video link, YouTube URL, or Instagram post URL"
                   className="flex-1 px-4 py-3 bg-input border border-input-border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[44px]"
                 />
                 <button
@@ -367,7 +367,7 @@ export default function ConvertPage() {
               )}
 
               <div className="flex items-center gap-2 flex-wrap text-xs">
-                <span className="text-orange-500">Direct video file links only (.mp4/.webm/.mov). Video pages such as YouTube/Pexels are not supported in this build.</span>
+                <span className="text-orange-500">Direct video links (.mp4/.webm/.mov), YouTube links, and Instagram post links are supported.</span>
                 <button
                   onClick={() => { setUrlInput(SAMPLE_VIDEO_URL); void runFetch(SAMPLE_VIDEO_URL); }}
                   className="ml-auto px-3 py-1.5 rounded-lg bg-cyan-600/10 text-cyan-600 dark:text-cyan-400 font-medium hover:bg-cyan-600/20 transition-colors"
