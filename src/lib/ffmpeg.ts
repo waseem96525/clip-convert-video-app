@@ -25,6 +25,7 @@ export function getVideoMetadata(filepath: string): Promise<any> {
       size: metadata.format?.size || 0,
       videoCodec: videoStream?.codec_name || 'unknown',
       audioCodec: audioStream?.codec_name || 'none',
+      hasAudio: audioStream ? true : false,
       audioSampleRate: audioStream?.sample_rate || '44100',
       audioChannels: audioStream?.channels || 2,
       width: videoStream?.width || 0,

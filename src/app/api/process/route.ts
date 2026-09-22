@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { extractAudio } from '@/lib/ffmpeg';
+import { extractAudio, getVideoMetadata } from '@/lib/ffmpeg';
 import { validateClipTimes } from '@/lib/validators';
 import { CONFIG } from '@/lib/config';
 import { generateId, sanitizeFilename, formatTime } from '@/lib/config';
@@ -27,6 +27,11 @@ export async function POST(request: NextRequest) {
     const video = db.prepare('SELECT * FROM videos WHERE id = ?').get(videoId) as any;
     if (!video) return NextResponse.json({ error: 'Video not found.' }, { status: 404 });
     if (!fs.existsSync(video.filepath)) return NextResponse.json({ error: 'Video file not found on server.' }, { status: 404 });
+
+    const meta = await getVideoMetadata(video.filepath);
+    if (!meta.hasAudio || meta.audioCodec === 'none') {
+      return NextResponse.json({ error: 'This video has no audio track, so no audio can be extracted.' }, { status: 400 });
+    }
 
     const duration = endTime - startTime;
     const clipId = generateId();

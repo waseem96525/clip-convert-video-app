@@ -63,6 +63,9 @@ export default function ConvertPage() {
       setVideoId(data.video.id);
       setSrc(`/api/video?id=${data.video.id}`);
       setDuration(data.video.duration);
+      if (data.video && data.video.hasAudio === false) {
+        toast.error('This video has no audio track, so no audio can be extracted.');
+      }
       setStartTime(0);
       setEndTime(data.video.duration);
       setClips([]);
@@ -87,6 +90,9 @@ export default function ConvertPage() {
       setVideoId(data.video.id);
       setSrc(`/api/video?id=${data.video.id}`);
       setDuration(data.video.duration);
+      if (data.video && data.video.hasAudio === false) {
+        toast.error('This video has no audio track, so no audio can be extracted.');
+      }
       setStartTime(0);
       setEndTime(data.video.duration);
       setClips([]);
