@@ -214,3 +214,12 @@ p, span, h1, h2, h3, h4, h5, h6 {
     padding-right: max(1rem, env(safe-area-inset-right));
   }
 }
+
+kbd {
+  background: var(--card);
+  border-color: var(--card-border);
+  color: var(--foreground);
+  border-width: 1px;
+  border-style: solid;
+  box-shadow: 0 1px 0 var(--card-border);
+}

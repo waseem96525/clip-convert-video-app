@@ -4,18 +4,32 @@ import { useState, useCallback, useSyncExternalStore } from 'react';
 import { useDarkMode } from '@/hooks/useDarkMode';
 import { useVideo, useKeyboard } from '@/hooks/useVideo';
 import { AudioSettings } from '@/types';
-import { formatTime, sanitizeFilename, generateId } from '@/lib/config';
+import { formatTime, formatBytes, sanitizeFilename, generateId } from '@/lib/config';
 import { validateClipTimes, validateFile } from '@/lib/validators';
 import { probeVideo, convertAudio } from '@/lib/media';
 import { getStoredClips, subscribeClips, saveStoredClip, removeStoredClip, StoredClip } from '@/lib/clipStore';
+import { downloadUrl, copyText } from '@/lib/download';
+import { getRecentUrls, addRecentUrl, SAMPLE_VIDEO_URL } from '@/lib/urlHistory';
+import { estimateClipSize, bitrateLabel } from '@/lib/estimate';
 import toast from 'react-hot-toast';
 import { safeJson } from '@/lib/clientHttp';
-import { MdUpload, MdLink } from 'react-icons/md';
+import {
+  MdUpload,
+  MdLink,
+  MdHelpOutline,
+  MdDownload,
+  MdContentCopy,
+  MdOpenInNew,
+  MdDelete,
+  MdMovie,
+} from 'react-icons/md';
 import Navbar from '@/components/Navbar';
 import UploadArea from '@/components/UploadArea';
 import VideoPlayer from '@/components/VideoPlayer';
+import VideoInfoCard from '@/components/VideoInfoCard';
 import Timeline from '@/components/Timeline';
 import AudioSettingsPanel from '@/components/AudioSettingsPanel';
+import ShortcutsModal from '@/components/ShortcutsModal';
 
 interface UrlFetchResponse {
   success?: boolean;
@@ -42,9 +56,11 @@ const defaultAudioSettings: AudioSettings = {
   volume: 0,
 };
 
+const FORMAT_CHIPS = ['MP3', 'WAV', 'M4A', 'OGG', 'FLAC'];
+
 export default function ConvertPage() {
   const { isDark } = useDarkMode();
-  const { src, setSrc, duration, setDuration, currentTime, play, pause, seek } = useVideo();
+  const { src, setSrc, duration, setDuration, currentTime, play, seek, playRange, clearVideo } = useVideo();
   const [startTime, setStartTime] = useState(0);
   const [endTime, setEndTime] = useState(0);
   const [audioSettings, setAudioSettings] = useState<AudioSettings>(defaultAudioSettings);
@@ -55,8 +71,12 @@ export default function ConvertPage() {
   const [progressMsg, setProgressMsg] = useState('');
   const [activeTab, setActiveTab] = useState<'upload' | 'url'>('upload');
   const [urlInput, setUrlInput] = useState('');
+  const [recentUrls, setRecentUrls] = useState<string[]>(() => getRecentUrls());
   const [inputName, setInputName] = useState('');
+  const [inputSize, setInputSize] = useState<number | undefined>(undefined);
   const [hasAudio, setHasAudio] = useState<boolean | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [isFetchingUrl, setIsFetchingUrl] = useState(false);
 
   useKeyboard({
     onPlayPause: () => { if (src) play(); },
@@ -82,6 +102,20 @@ export default function ConvertPage() {
     }
   }, [setDuration]);
 
+  const resetSelection = useCallback(() => {
+    setStartTime(0);
+    setEndTime(0);
+    setClipName('');
+  }, []);
+
+  const handleResetVideo = useCallback(() => {
+    clearVideo();
+    setHasAudio(null);
+    setInputName('');
+    setInputSize(undefined);
+    resetSelection();
+  }, [clearVideo, resetSelection]);
+
   const handleFileUpload = useCallback(async (file: File) => {
     const validation = validateFile(file);
     if (!validation.valid) {
@@ -90,29 +124,34 @@ export default function ConvertPage() {
     }
     const objectUrl = URL.createObjectURL(file);
     setInputName(file.name);
+    setInputSize(file.size);
     setHasAudio(null);
     setStartTime(0);
     setEndTime(0);
     setSrc(objectUrl);
-    toast.success('Video loaded', { id: 'load' });
+    toast.success('Video loaded locally', { id: 'load' });
     void probeAndLoad(objectUrl);
   }, [setSrc, probeAndLoad]);
 
-  const handleUrlSubmit = useCallback(async () => {
-    if (!urlInput.trim()) { toast.error('Please enter a URL', { id: 'url' }); return; }
+  const runFetch = useCallback(async (url: string) => {
+    if (!url.trim()) { toast.error('Please enter a URL', { id: 'url' }); return; }
+    setIsFetchingUrl(true);
     try {
-      toast.loading('Fetching video...', { id: 'url' });
+      toast.loading('Fetching video…', { id: 'url' });
       const res = await fetch('/api/url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: urlInput.trim() }),
+        body: JSON.stringify({ url: url.trim() }),
       });
       const data = (await safeJson<UrlFetchResponse>(res)) || ({} as UrlFetchResponse);
       if (!res.ok) throw new Error(data.error || `Failed to fetch video (${res.status}).`);
       const fetchedVideo = data.video;
       if (!fetchedVideo?.url) throw new Error('The server did not return a video URL.');
+      setRecentUrls(addRecentUrl(url.trim()));
+      setUrlInput(url.trim());
       toast.success('Video fetched!', { id: 'url' });
       setInputName(fetchedVideo.name || 'fetched-video');
+      setInputSize(fetchedVideo.size || undefined);
       setHasAudio(null);
       setStartTime(0);
       setEndTime(0);
@@ -120,8 +159,14 @@ export default function ConvertPage() {
       void probeAndLoad(fetchedVideo.url);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to fetch video', { id: 'url' });
+    } finally {
+      setIsFetchingUrl(false);
     }
-  }, [urlInput, setSrc, probeAndLoad]);
+  }, [setSrc, probeAndLoad]);
+
+  const handleUrlSubmit = useCallback(() => {
+    void runFetch(urlInput);
+  }, [urlInput, runFetch]);
 
   const setStartAtCurrent = useCallback(() => {
     const video = document.querySelector('video') as HTMLVideoElement;
@@ -133,21 +178,37 @@ export default function ConvertPage() {
     if (video) setEndTime(video.currentTime);
   }, []);
 
+  const handleDownloadVideo = useCallback(async () => {
+    if (!src) return;
+    const name = sanitizeFilename(inputName) || 'video';
+    const ok = await downloadUrl(src, name);
+    if (ok) toast.success('Video download started!');
+    else toast.error('Could not download the video.');
+  }, [src, inputName]);
+
+  const handlePreviewClip = useCallback(() => {
+    if (!src || !(endTime > startTime)) return;
+    playRange(startTime, endTime);
+  }, [src, startTime, endTime, playRange]);
+
   const downloadClip = useCallback(async (clip: StoredClip) => {
-    try {
-      const res = await fetch(clip.url);
-      if (!res.ok) throw new Error('Download failed');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${clip.name || 'clip'}.${clip.format}`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-      toast.success('Download started!');
-    } catch {
-      toast.error('Could not download clip.');
-    }
+    const ok = await downloadUrl(clip.url, `${clip.name || 'clip'}.${clip.format}`);
+    if (ok) toast.success('Download started!');
+    else toast.error('Could not download clip.');
+  }, []);
+
+  const copyClipUrl = useCallback(async (clip: StoredClip) => {
+    const ok = await copyText(clip.url);
+    if (ok) toast.success('Clip URL copied to clipboard!');
+    else toast.error('Could not copy the link.');
+  }, []);
+
+  const openClip = useCallback((clip: StoredClip) => {
+    const a = document.createElement('a');
+    a.href = clip.url;
+    a.target = '_blank';
+    a.rel = 'noreferrer';
+    a.click();
   }, []);
 
   const deleteClip = useCallback(async (clip: StoredClip) => {
@@ -155,6 +216,7 @@ export default function ConvertPage() {
     if (clip.url.startsWith('http')) {
       fetch('/api/url', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: clip.url }) }).catch(() => {});
     }
+    toast.success('Clip deleted');
   }, []);
 
   const validateAndCreate = useCallback(async () => {
@@ -228,46 +290,105 @@ export default function ConvertPage() {
     }
   }, [src, hasAudio, startTime, endTime, audioSettings, clipName]);
 
+  const clipDuration = Math.max(0, endTime - startTime);
+  const estimatedMb = estimateClipSize(audioSettings.format, clipDuration, audioSettings);
+
   return (
     <div className={`min-h-screen ${isDark ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
       <Navbar />
       <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8 space-y-4 sm:space-y-6">
-        {/* Header */}
-        <div className="text-center sm:text-left">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-1">Video to Audio</h1>
-          <p className="text-sm sm:text-base text-muted">Upload a video or paste a direct video URL, trim the section you want, and extract high-quality audio right in your browser.</p>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-2 flex-wrap">
-          <button onClick={() => setActiveTab('upload')} className={`px-4 py-3 rounded-lg font-medium transition-colors text-sm min-h-[44px] ${activeTab === 'upload' ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
-            <MdUpload className="inline mr-2" />Upload File
-          </button>
-          <button onClick={() => setActiveTab('url')} className={`px-4 py-3 rounded-lg font-medium transition-colors text-sm min-h-[44px] ${activeTab === 'url' ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
-            <MdLink className="inline mr-2" />Video URL
-          </button>
-        </div>
-
-        {activeTab === 'upload' && <div className="mb-4"><UploadArea onUpload={handleFileUpload} onUrlClick={() => setActiveTab('url')} /></div>}
-
-        {activeTab === 'url' && (
-          <div className="mb-4 space-y-3">
-            <div className="flex gap-2 flex-col sm:flex-row">
-              <input
-                type="url"
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="https://example.com/video.mp4"
-                className="flex-1 px-4 py-3 bg-input border border-input-border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[44px]"
-              />
-              <button onClick={handleUrlSubmit} disabled={isProcessing} className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors min-h-[44px] whitespace-nowrap">Fetch Video</button>
+        {/* Hero */}
+        <section className="rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-cyan-500 text-white p-5 sm:p-8 shadow-lg">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold mb-2">Video to Audio Converter</h1>
+              <p className="text-sm sm:text-base text-indigo-100">Upload a video or paste a direct video URL, trim the section you want, and extract high-quality audio — all inside your browser.</p>
             </div>
-            <p className="text-xs text-orange-500">Direct video file links only (.mp4/.webm/.mov). Video pages such as YouTube/Pexels are not supported in this build.</p>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              {FORMAT_CHIPS.map((f) => (
+                <span key={f} className="px-2.5 py-1 rounded-lg bg-white/15 backdrop-blur text-xs font-mono font-semibold">{f}</span>
+              ))}
+            </div>
           </div>
-        )}
+        </section>
+
+        {/* Source */}
+        <section className="space-y-3">
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setActiveTab('upload')}
+              className={`px-4 py-3 rounded-xl font-medium transition-colors text-sm min-h-[44px] flex-1 sm:flex-none ${activeTab === 'upload' ? 'bg-indigo-600 text-white shadow' : 'bg-card border border-card-border text-muted hover:border-indigo-400'}`}
+            >
+              <MdUpload className="inline mr-2 text-lg" />Upload File
+            </button>
+            <button
+              onClick={() => setActiveTab('url')}
+              className={`px-4 py-3 rounded-xl font-medium transition-colors text-sm min-h-[44px] flex-1 sm:flex-none ${activeTab === 'url' ? 'bg-indigo-600 text-white shadow' : 'bg-card border border-card-border text-muted hover:border-indigo-400'}`}
+            >
+              <MdLink className="inline mr-2 text-lg" />Video URL
+            </button>
+          </div>
+
+          {activeTab === 'upload' && <div><UploadArea onUpload={handleFileUpload} onUrlClick={() => setActiveTab('url')} /></div>}
+
+          {activeTab === 'url' && (
+            <div className="space-y-3 bg-card border border-card-border rounded-xl p-3 sm:p-4">
+              <div className="flex gap-2 flex-col sm:flex-row">
+                <input
+                  type="url"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  placeholder="https://example.com/video.mp4"
+                  className="flex-1 px-4 py-3 bg-input border border-input-border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[44px]"
+                />
+                <button
+                  onClick={handleUrlSubmit}
+                  disabled={isProcessing || isFetchingUrl || !urlInput.trim()}
+                  className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors min-h-[44px] whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isFetchingUrl ? 'Fetching…' : 'Fetch Video'}
+                </button>
+              </div>
+
+              {recentUrls.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-muted">Recent:</span>
+                  {recentUrls.map((url) => (
+                    <button
+                      key={url}
+                      onClick={() => { setUrlInput(url); void runFetch(url); }}
+                      className="px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-xs text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors truncate max-w-[220px]"
+                      title={url}
+                    >
+                      {url.replace(/^https?:\/\/(www\.)?/, '').slice(0, 40)}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 flex-wrap text-xs">
+                <span className="text-orange-500">Direct video file links only (.mp4/.webm/.mov). Video pages such as YouTube/Pexels are not supported in this build.</span>
+                <button
+                  onClick={() => { setUrlInput(SAMPLE_VIDEO_URL); void runFetch(SAMPLE_VIDEO_URL); }}
+                  className="ml-auto px-3 py-1.5 rounded-lg bg-cyan-600/10 text-cyan-600 dark:text-cyan-400 font-medium hover:bg-cyan-600/20 transition-colors"
+                >
+                  Try a sample video
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
 
         {src && (
-          <div className="space-y-4 animate-fade-in">
+          <section className="space-y-4 animate-fade-in">
+            <VideoInfoCard
+              name={inputName}
+              size={inputSize}
+              duration={duration}
+              hasAudio={hasAudio}
+              onDownload={handleDownloadVideo}
+              onReset={handleResetVideo}
+            />
             <VideoPlayer src={src} />
             <Timeline
               duration={duration}
@@ -280,37 +401,67 @@ export default function ConvertPage() {
               onSetStart={setStartAtCurrent}
               onSetEnd={setEndAtCurrent}
             />
-          </div>
+          </section>
         )}
 
         {!src && (
-          <div className="flex items-center justify-center h-48 sm:h-64 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600">
-            <p className="text-muted text-lg">No video loaded</p>
-          </div>
+          <section className="flex flex-col items-center justify-center h-48 sm:h-56 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 text-center px-4">
+            <MdMovie className="text-5xl text-gray-400 dark:text-gray-600 mb-3" />
+            <p className="text-muted text-lg">No video loaded yet</p>
+            <p className="text-xs text-muted mt-1">Upload a video file or fetch one from a direct URL to get started</p>
+          </section>
         )}
 
         {src && (
-          <div className="space-y-4">
-            <input
-              type="text"
-              value={clipName}
-              onChange={(e) => setClipName(e.target.value)}
-              placeholder="Clip name (e.g., Intro)"
-              className="w-full px-4 py-3 bg-input border border-input-border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 min-h-[44px]"
-            />
+          <section className="space-y-4 animate-fade-in">
             <AudioSettingsPanel settings={audioSettings} onChange={setAudioSettings} />
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button onClick={() => { play(); pause(); setTimeout(play, 100); }} className="px-6 py-3 bg-gray-200 dark:bg-gray-700 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors min-h-[48px]">▶ Preview Clip</button>
-              <button onClick={validateAndCreate} disabled={isProcessing || hasAudio === null} className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[48px]">
-                {isProcessing ? `Processing… ${progress}%` : '🎵 CREATE AUDIO CLIP'}
-              </button>
+
+            <div className="space-y-3 p-4 sm:p-5 bg-card rounded-xl border border-card-border">
+              <div>
+                <label className="text-sm font-medium text-muted block mb-1">Clip name (optional)</label>
+                <input
+                  type="text"
+                  value={clipName}
+                  onChange={(e) => setClipName(e.target.value)}
+                  placeholder={`e.g. Intro — defaults to ${audioSettings.format.toUpperCase()} clip`}
+                  className="w-full px-4 py-3 bg-input border border-input-border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[44px]"
+                />
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={handlePreviewClip}
+                  disabled={isProcessing || !(endTime > startTime)}
+                  className="px-6 py-3.5 bg-gray-200 dark:bg-gray-700 rounded-xl font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors min-h-[48px] disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Play only the selected section"
+                >
+                  Preview Clip
+                </button>
+                <button
+                  onClick={validateAndCreate}
+                  disabled={isProcessing || hasAudio === null}
+                  className="px-6 py-3.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[48px]"
+                >
+                  {isProcessing ? `Creating Audio… ${progress}%` : 'Create Audio Clip'}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3 flex-wrap text-xs text-muted">
+                {clipDuration > 0 && (
+                  <span className="px-2.5 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium">
+                    Clip: {formatTime(clipDuration)}{estimatedMb > 0 ? ` · ≈ ${estimatedMb.toFixed(1)} MB (${bitrateLabel(audioSettings.bitrate)})` : ''}
+                  </span>
+                )}
+                {hasAudio === false && <span className="text-amber-600 dark:text-amber-400">This video has no audio track — create is disabled.</span>}
+                {hasAudio === null && src && <span className="text-muted">Detecting audio track…</span>}
+                <span className="ml-auto">{inputName}{inputSize ? ` · ${formatBytes(inputSize)}` : ''}</span>
+              </div>
             </div>
-            <p className="text-xs text-muted">{inputName}</p>
-          </div>
+          </section>
         )}
 
         {isProcessing && (
-          <div className="space-y-3 p-4 bg-card rounded-xl border border-card-border animate-fade-in">
+          <section className="space-y-3 p-4 bg-card rounded-xl border border-card-border animate-fade-in">
             <div className="flex items-center justify-between text-sm">
               <span>{progressMsg}</span>
               <span className="font-mono">{progress}%</span>
@@ -318,29 +469,61 @@ export default function ConvertPage() {
             <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
               <div className="h-full bg-gradient-to-r from-indigo-500 to-cyan-500 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
             </div>
-          </div>
+          </section>
         )}
 
         {clips.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="text-xl font-bold">Created Clips ({clips.length})</h2>
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold">Created Clips ({clips.length})</h2>
+              <span className="text-xs text-muted">Saved on this browser</span>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {clips.map(clip => (
-                <div key={clip.id} className="p-4 bg-card rounded-xl border border-card-border">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-semibold text-sm truncate">{clip.name}</h4>
-                    <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded whitespace-nowrap">✓ Ready</span>
+                <div key={clip.id} className="p-4 bg-card rounded-xl border border-card-border hover:border-indigo-500 transition-colors">
+                  <div className="flex items-start justify-between mb-2 gap-2">
+                    <div className="min-w-0">
+                      <h4 className="font-semibold text-sm truncate" title={clip.name}>{clip.name}</h4>
+                      <p className="text-xs text-muted truncate">{formatTime(clip.startTime)} - {formatTime(clip.endTime)}</p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="px-2 py-0.5 rounded text-xs font-mono bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">{clip.format.toUpperCase()}</span>
+                    </div>
                   </div>
-                  <p className="text-xs text-muted mb-2 truncate">{formatTime(clip.startTime)} – {formatTime(clip.endTime)} · {clip.format.toUpperCase()} · {clip.bitrate}</p>
+                  <p className="text-xs text-muted mb-3 truncate">
+                    {clip.duration > 0 ? `${formatTime(clip.duration)} · ` : ''}{clip.bitrate ? `${bitrateLabel(clip.bitrate)} · ` : ''}{clip.size > 0 ? formatBytes(clip.size) : ''}
+                  </p>
                   <div className="flex gap-2">
-                    <button onClick={() => downloadClip(clip)} className="flex-1 px-3 py-3 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 transition-colors min-h-[44px]">Download</button>
-                    <button onClick={() => deleteClip(clip)} className="flex-1 px-3 py-3 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700 transition-colors min-h-[44px]">Delete</button>
+                    <button onClick={() => downloadClip(clip)} className="flex-1 px-3 py-3 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors min-h-[44px]">
+                      <MdDownload className="inline mr-1" />Download
+                    </button>
+                    <button onClick={() => copyClipUrl(clip)} className="px-3 py-3 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors min-h-[44px]" title="Copy clip URL" aria-label="Copy clip URL">
+                      <MdContentCopy />
+                    </button>
+                    <button onClick={() => openClip(clip)} className="px-3 py-3 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors min-h-[44px]" title="Open in new tab" aria-label="Open in new tab">
+                      <MdOpenInNew />
+                    </button>
+                    <button onClick={() => deleteClip(clip)} className="px-3 py-3 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors min-h-[44px]" title="Delete clip" aria-label="Delete clip">
+                      <MdDelete />
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+          </section>
         )}
+
+        {/* Help / shortcuts button */}
+        <button
+          onClick={() => setShortcutsOpen(true)}
+          className="fixed bottom-5 right-5 z-40 w-14 h-14 rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center"
+          aria-label="Keyboard shortcuts"
+          title="Keyboard shortcuts"
+        >
+          <MdHelpOutline className="text-2xl" />
+        </button>
+
+        <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       </main>
     </div>
   );

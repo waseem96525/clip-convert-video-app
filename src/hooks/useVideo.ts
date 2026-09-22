@@ -16,6 +16,7 @@ interface UseVideoReturn {
   pause: () => void;
   seek: (time: number) => void;
   setVolume: (v: number) => void;
+  playRange: (from: number, to: number) => void;
   loadVideo: (url: string) => void;
   clearVideo: () => void;
 }
@@ -48,6 +49,37 @@ export function useVideo(): UseVideoReturn {
   const setVolume = useCallback((v: number) => {
     setVolumeState(v);
     if (videoRef.current) videoRef.current.volume = v;
+  }, []);
+
+  const playRange = useCallback((from: number, to: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    const end = Math.min(to, video.duration || to);
+    if (!(end > from) || !isFinite(end)) {
+      video.currentTime = Math.max(0, from);
+      video.play().catch(() => {});
+      setCurrentTime(video.currentTime);
+      return;
+    }
+
+    const cleanup = () => {
+      video.removeEventListener('timeupdate', stopAtEnd);
+      video.removeEventListener('pause', cleanup);
+      video.removeEventListener('ended', cleanup);
+    };
+    const stopAtEnd = () => {
+      if (video.currentTime >= end) {
+        video.pause();
+        setCurrentTime(video.currentTime);
+        cleanup();
+      }
+    };
+    video.addEventListener('timeupdate', stopAtEnd);
+    video.addEventListener('pause', cleanup, { once: true });
+    video.addEventListener('ended', cleanup, { once: true });
+    video.currentTime = Math.max(0, from);
+    video.play().catch(() => {});
+    setCurrentTime(video.currentTime);
   }, []);
 
   const loadVideo = useCallback((url: string) => {
@@ -119,6 +151,7 @@ export function useVideo(): UseVideoReturn {
     pause,
     seek,
     setVolume,
+    playRange,
     loadVideo,
     clearVideo,
   };

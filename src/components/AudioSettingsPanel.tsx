@@ -7,12 +7,46 @@ interface AudioSettingsPanelProps {
   onChange: (settings: AudioSettings) => void;
 }
 
+const DEFAULTS: AudioSettings = {
+  format: 'mp3',
+  bitrate: '192k',
+  sampleRate: 'original',
+  channels: 'stereo',
+  normalize: false,
+  fadeIn: 0,
+  fadeOut: 0,
+  volume: 0,
+};
+
+function isDefault(s: AudioSettings): boolean {
+  return (
+    s.format === DEFAULTS.format &&
+    s.bitrate === DEFAULTS.bitrate &&
+    s.sampleRate === DEFAULTS.sampleRate &&
+    s.channels === DEFAULTS.channels &&
+    s.normalize === DEFAULTS.normalize &&
+    s.fadeIn === DEFAULTS.fadeIn &&
+    s.fadeOut === DEFAULTS.fadeOut &&
+    s.volume === DEFAULTS.volume
+  );
+}
+
 export default function AudioSettingsPanel({ settings, onChange }: AudioSettingsPanelProps) {
   const update = (partial: Partial<AudioSettings>) => onChange({ ...settings, ...partial });
 
   return (
     <div className="space-y-4 p-4 sm:p-6 bg-card rounded-xl border border-card-border w-full">
-      <h3 className="text-lg font-semibold">Audio Settings</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Audio Settings</h3>
+        {!isDefault(settings) && (
+          <button
+            onClick={() => onChange(DEFAULTS)}
+            className="px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors min-h-[36px]"
+          >
+            Reset to defaults
+          </button>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>

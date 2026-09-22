@@ -2,20 +2,22 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useDarkMode } from '@/hooks/useDarkMode';
 
 export default function Navbar() {
   const { isDark, toggle } = useDarkMode();
   const [menuOpen, setMenuOpen] = useState(false);
+  const pathname = usePathname();
 
   const links = [
-    { href: '/', label: 'Home' },
-    { href: '/convert', label: 'Video to Audio' },
-    { href: '/clips', label: 'My Clips' },
-    { href: '/settings', label: 'Settings' },
+    { href: '/', label: 'Home', exact: true },
+    { href: '/convert', label: 'Video to Audio', exact: false },
+    { href: '/clips', label: 'My Clips', exact: false },
+    { href: '/settings', label: 'Settings', exact: false },
   ];
 
-  const [activeHref, setActiveHref] = useState('/convert');
+  const isActive = (href: string, exact: boolean) => (exact ? pathname === href : pathname.startsWith(href));
 
   return (
     <nav className={`border-b sticky top-0 z-50 backdrop-blur-md ${isDark ? 'border-gray-700 bg-gray-900/90' : 'border-gray-200 bg-white/90'}`}>
@@ -32,9 +34,8 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                onClick={() => setActiveHref(link.href)}
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  activeHref === link.href
+                  isActive(link.href, link.exact)
                     ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
@@ -77,7 +78,7 @@ export default function Navbar() {
                 href={link.href}
                 onClick={() => setMenuOpen(false)}
                 className={`block px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                  activeHref === link.href
+                  isActive(link.href, link.exact)
                     ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}

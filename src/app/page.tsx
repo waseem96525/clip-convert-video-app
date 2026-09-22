@@ -10,9 +10,9 @@ export default function Home() {
   const features = [
     { icon: MdVideoLibrary, title: "Video Upload", desc: "Upload your own video files in MP4, WebM, MOV, and more formats." },
     { icon: MdContentCut, title: "Precision Trimming", desc: "Select exactly the section you need with millisecond precision." },
-    { icon: MdDownload, title: "Multiple Formats", desc: "Export as MP3, WAV, M4A, OGG, FLAC with adjustable quality." },
-    { icon: MdSpeed, title: "Fast Processing", desc: "Server-side FFmpeg processing ensures quick clip extraction." },
-    { icon: MdSecurity, title: "Privacy First", desc: "Temporary files are automatically deleted after 24 hours." },
+    { icon: MdDownload, title: "Multiple Formats", desc: "Export as MP3, WAV, M4A, OGG, FLAC with adjustable bitrate and quality." },
+    { icon: MdSpeed, title: "In-Browser Processing", desc: "FFmpeg runs right inside your browser — fast, with no waiting queues." },
+    { icon: MdSecurity, title: "Privacy First", desc: "Your video never has to leave your device for most conversions." },
     { icon: MdPhoneIphone, title: "Mobile Friendly", desc: "Works beautifully across desktop, tablet, and mobile devices." },
   ];
 
@@ -45,7 +45,7 @@ export default function Home() {
               <span className="bg-gradient-to-r from-indigo-500 to-cyan-500 bg-clip-text text-transparent">Perfect Audio Clip</span>
             </h1>
             <p className="text-base sm:text-lg text-muted max-w-xl sm:max-w-2xl mx-auto mb-8">
-              Upload a video or paste a supported video URL, trim the exact section you need, and download it as a high-quality audio file.
+              Upload a video or paste a direct video URL, trim the exact section you need, and download it as a high-quality audio file — converted right in your browser.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <Link href="/convert" className="w-full sm:w-auto px-8 py-4 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors text-lg text-center">
@@ -55,6 +55,9 @@ export default function Home() {
                 Paste Video URL
               </Link>
             </div>
+            <p className="text-xs text-muted mt-4 flex items-center justify-center gap-1.5">
+              <MdSecurity className="inline" /> No sign-up needed. Files are processed on your device.
+            </p>
           </div>
         </section>
 
@@ -76,9 +79,9 @@ export default function Home() {
             <h2 className="text-2xl font-bold mb-6 text-center">How It Works</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               {[
-                { step: '1', title: 'Upload or Paste URL', desc: 'Provide your video file or a supported URL.' },
-                { step: '2', title: 'Trim & Select', desc: 'Choose the exact section and set audio preferences.' },
-                { step: '3', title: 'Download', desc: 'Get your high-quality audio clip instantly.' },
+                { step: '1', title: 'Upload or Paste URL', desc: 'Provide your video file or a direct .mp4/.webm/.mov link.' },
+                { step: '2', title: 'Trim & Select', desc: 'Choose the exact section, then tune format, bitrate, and effects.' },
+                { step: '3', title: 'Download', desc: 'The clip is converted with FFmpeg in your browser and saved to cloud storage.' },
               ].map((item, i) => (
                 <div key={i} className="text-center">
                   <div className="w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xl font-bold mx-auto mb-4">{item.step}</div>
