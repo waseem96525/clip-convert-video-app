@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
       case 'STORAGE':
         return NextResponse.json({ error: 'Storage is not configured. Set BLOB_READ_WRITE_TOKEN.' }, { status: 503 });
       default:
-        return NextResponse.json({ error: 'Failed to fetch the video from this link.' }, { status: 500 });
+        return NextResponse.json({ error: msg }, { status: 500 });
     }
   }
 }
