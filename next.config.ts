@@ -17,6 +17,20 @@ const nextConfig: NextConfig = {
           { key: 'Access-Control-Allow-Headers', value: 'Content-Type' },
         ],
       },
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, max-age=0' },
+          { key: 'Pragma', value: 'no-cache' },
+          { key: 'Expires', value: '0' },
+        ],
+      },
+      {
+        source: '/_next/static/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, max-age=0' },
+        ],
+      },
     ];
   },
 };
